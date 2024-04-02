@@ -1,0 +1,26 @@
+**/openrc.sh
+**/.env
+**/.envrc
+**/.terraform/*
+**/*.tfstate
+**/*.tfstate.* 
+**/*.tfvars
+**/*.tfvars.json
+**/.terraformrc
+**/terraform.rc
+**/*.swp
+**/*.log
+.bak
+.tmp
+**/.terraform.lock.hcl
+
+
+# Local Builds Environment
+## Vagrant
+**/Vagrantfile*
+**/.vagrant*
+
+# Docker
+**.dockerignore
+**/Dockerfile*
+.DS_Store
