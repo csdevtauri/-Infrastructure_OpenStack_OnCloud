@@ -41,5 +41,11 @@ resource "openstack_networking_port_v2" "openvpn_port" {
     // ip_address = "<adresse-ip-fixe-désirée>"
   }
 }
+resource "openstack_networking_floatingip_associate_v2" "fip_assoc" {
+  floating_ip = openstack_networking_floatingip_v2.floatip_1.address
+  port_id     = openstack_networking_port_v2.openvpn_port.id
+}
+
+
 
 
