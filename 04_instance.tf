@@ -1,13 +1,17 @@
+# This Terraform file configures an OpenVPN instance on OpenStack with the necessary network resources.
+# 1. Retrieves the IDs of the external subnets.
+# 2. Creates a floating IP address in the specified pool.
+# 3. Configures an OpenVPN compute instance with the specified image, flavor, metadata, and security groups.
+# 4. Creates a network port for the OpenVPN instance with associated security groups.
+# 5. Associates the floating IP address with the network port of the OpenVPN instance.
 
 data "openstack_networking_subnet_ids_v2" "ext_subnets" {
   network_id = var.network_external_id
 }
-
 resource "openstack_networking_floatingip_v2" "floatip_1" {
   pool       = var.network_external_name
   subnet_ids = data.openstack_networking_subnet_ids_v2.ext_subnets.ids
 }
-
 resource "openstack_compute_instance_v2" "openvpn" {
   name            = "openvpn"
   image_id        = var.instance_image_id
@@ -37,8 +41,8 @@ resource "openstack_networking_port_v2" "openvpn_port" {
   ]
   fixed_ip {
     subnet_id = openstack_networking_subnet_v2.network_subnet.id
-    // Optionnellement, vous pouvez spécifier une adresse IP spécifique
-    // ip_address = "<adresse-ip-fixe-désirée>"
+    // Optionally, you can specify a specific IP address
+    // ip_address = “<address-ip-fixed-desired>”
   }
 }
 resource "openstack_networking_floatingip_associate_v2" "fip_assoc" {
