@@ -27,3 +27,15 @@ old
 **.dockerignore
 **/Dockerfile*
 .DS_Store
+README.md
+ansible
+secrets
+Dockerfile
+docker-compose.yml
+
+## logs
+**/logs*
+log_all_installs.txt
+log_all_installs.json
+error_log.json
+**/log_installs.sh
