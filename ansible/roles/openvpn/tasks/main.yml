@@ -1,0 +1,250 @@
+---
+# tasks file for roles/openvpn
+# Mettre à jour et installer les paquets
+
+# R1: Mise à jour des paquets apt
+- name: Update apt packages
+  ansible.builtin.apt:
+    upgrade: "True"
+    cache_valid_time: 3600
+  # Pourquoi: Cela garantit que tous les paquets installés sont à jour, ce qui améliore la sécurité et la stabilité du système.
+
+# R2: Installation de OpenVPN et autres paquets nécessaires
+- name: Install openvpn
+  ansible.builtin.apt:
+    name: "openvpn,easy-rsa,iptables-persistent"
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  # Pourquoi: Cette étape installe OpenVPN, easy-rsa pour la gestion des certificats, et iptables-persistent pour préserver les règles de pare-feu après un redémarrage.
+
+# R3: Vérification de l'existence du répertoire CA
+- name: Check if ca dir already exists
+  ansible.builtin.stat:
+    path: "{{ ansible_env.HOME }}/openvpn-ca/"
+  register: __check_openvpn_ca_dir_present
+  # Pourquoi: Vérifie si le répertoire de l'autorité de certification (CA) existe déjà pour éviter de le recréer inutilement.
+
+# R4: Création du répertoire CA si nécessaire
+- name: Create CA dir
+  command: make-cadir {{ ansible_env.HOME }}/openvpn-ca
+  when: __check_openvpn_ca_dir_present.stat.exists == false
+  # Pourquoi: Crée le répertoire de l'autorité de certification si celui-ci n'existe pas, permettant ainsi de stocker les fichiers nécessaires pour générer les certificats.
+
+# R5: Configuration des variables pour générer le CA
+- name: Customize CA variable configuration
+  ansible.builtin.lineinfile:
+    dest: "{{ ansible_env.HOME }}/openvpn-ca/vars"
+    regexp: "^{{ item.property | regex_escape() }}="
+    line: "{{ item.property }}={{ item.value }}"
+  loop:
+    - { property: 'export KEY_NAME', value: '{{ vpn_key_name }}' }
+    - { property: 'export KEY_COUNTRY', value: '{{ vpn_key_country }}' }
+    - { property: 'export KEY_PROVINCE', value: '{{ vpn_key_province }}' }
+    - { property: 'export KEY_CITY', value: '{{ vpn_key_city }}' }
+    - { property: 'export KEY_ORG', value: '{{ vpn_key_org }}' }
+    - { property: 'export KEY_EMAIL', value: '{{ vpn_key_email }}' }
+    - { property: 'export KEY_OU', value: '{{ vpn_key_ou }}' }
+    - { property: 'export KEY_CONFIG', value: '{{ ansible_env.HOME }}/openvpn-ca/openssl-1.1.1.cnf' }
+    - { property: 'export KEY_DIR', value: '{{ ansible_env.HOME }}/openvpn-ca/keys' }
+  # Pourquoi: Configure les variables nécessaires à la génération du certificat de l'autorité de certification (CA) en fonction des informations fournies.
+
+# R6: Vérification de l'existence du certificat CA
+- name: Check if CA certificate already exists
+  ansible.builtin.stat:
+    path: "{{ ansible_env.HOME }}/openvpn-ca/pki/ca.crt"
+  register: __check_openvpn_ca_crt_file_present
+  # Pourquoi: Vérifie si le certificat CA a déjà été généré pour éviter de le régénérer.
+
+# R7: Génération du certificat CA
+- name: Build the certificate authority
+  ansible.builtin.shell: >
+    ./easyrsa init-pki;
+    ./easyrsa --batch --req-cn="cn_{{ vpn_server_name }}" build-ca nopass;
+  args:
+    chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
+    executable: /bin/bash
+  when: __check_openvpn_ca_crt_file_present.stat.exists == false
+  # Pourquoi: Initialise l'infrastructure à clé publique (PKI) et génère le certificat de l'autorité de certification (CA) uniquement si celui-ci n'existe pas déjà.
+
+# TODO: Ajouter la vérification de l'existence du fichier dh.pem
+
+# R8: Vérification de l'existence du fichier CRL
+- name: Check if CRL file already exists
+  ansible.builtin.stat:
+    path: "{{ ansible_env.HOME }}/openvpn-ca/pki/crl.pem"
+  register: __check_openvpn_crl_server_crt_file_present
+  # Pourquoi: Vérifie si le fichier de liste de révocation des certificats (CRL) existe déjà pour éviter de le régénérer inutilement.
+
+# TODO: Ajouter la vérification de l'existence du fichier server.crt
+
+# R9: Génération du CRL et du certificat serveur
+- name: Build CRL and server certificate
+  ansible.builtin.shell: >
+    ./easyrsa --batch build-server-full "server_{{ vpn_server_name }}" nopass;
+    EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl;
+  args:
+    chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
+    executable: /bin/bash
+  when: __check_openvpn_crl_server_crt_file_present.stat.exists == false
+  # Pourquoi: Génère le certificat du serveur et la liste de révocation des certificats (CRL) uniquement si le CRL n'existe pas déjà, garantissant que les certificats sont à jour et valides.
+
+- name: check if ta key file already exists
+  ansible.builtin.stat:
+    path: "{{ ansible_env.HOME }}/openvpn-ca/pki/ta.key"
+  register: __check_openvpn_ta_key_file_present
+  # Pourquoi: Vérifie si le fichier de clé de sécurité temporaire (TA) existe déjà pour éviter de le régénérer inutilement.
+
+- name: key generation
+  ansible.builtin.shell: >
+    source vars;
+    openvpn --genkey --secret pki/ta.key;
+  args:
+    chdir: "{{ ansible_env.HOME }}/openvpn-ca/"
+    executable: /bin/bash
+  when: __check_openvpn_ta_key_file_present.stat.exists == false
+  # Pourquoi: Génère une clé de sécurité temporaire (TA) uniquement si elle n'existe pas déjà, garantissant la sécurité des communications entre le serveur et les clients.
+
+- name: Copy key and certificates to /etc/openvpn
+  ansible.builtin.copy:
+    remote_src: yes
+    src: "{{ ansible_env.HOME }}/openvpn-ca/pki/{{ item }}"
+    dest: "/etc/openvpn/"
+    owner: root
+    group: root
+    mode: 0600
+  loop:
+    - "ca.crt"
+    - "private/ca.key"
+    - "private/server_{{ vpn_server_name }}.key"
+    - "issued/server_{{ vpn_server_name }}.crt"
+    - "ta.key"
+    - "crl.pem"
+  # Pourquoi: Copie les fichiers de clés et de certificats générés dans le répertoire /etc/openvpn, où ils seront utilisés par le serveur OpenVPN pour authentifier les clients et sécuriser les communications.
+
+- name: Check if conf file already exists
+  ansible.builtin.stat:
+    path: /etc/openvpn/server.conf
+  register: __check_openvpn_conf_file_present
+  # Pourquoi: Vérifie si le fichier de configuration du serveur OpenVPN existe déjà pour éviter de le régénérer inutilement.
+
+- name: generate server.conf from sample config
+  ansible.builtin.copy:
+    remote_src: yes
+    src: /usr/share/doc/openvpn/examples/sample-config-files/server.conf
+    dest: /etc/openvpn/server.conf
+  when: __check_openvpn_conf_file_present.stat.exists == false
+  # Pourquoi: Génère le fichier de configuration du serveur OpenVPN à partir d'un exemple de configuration fourni par le paquet OpenVPN, uniquement si le fichier de configuration n'existe pas déjà.
+
+- name: Adjust OpenVPN server configuration
+  ansible.builtin.lineinfile:
+    dest: "/etc/openvpn/server.conf"
+    regexp: "^{{ item.regex | regex_escape() }}"
+    line: "{{ item.value }}"
+  loop:
+    - { regex: ';user nobody', value: 'user nobody' }
+    - { regex: ';group nogroup', value: 'group nogroup' }
+    - { regex: ';push "redirect-gateway def1 bypass-dhcp"', value: 'push "redirect-gateway def1 bypass-dhcp"' }
+    - { regex: 'cert server.crt', value: 'cert server_{{ vpn_server_name }}.crt' }
+    - { regex: 'key server.key', value: 'key server_{{ vpn_server_name }}.key' }
+    - { regex: ';topology subnet', value: 'topology subnet' }
+    - { regex: 'dh dh2048.pem', value: 'dh none' }
+  # - { regex: ';compress lz4-v2', value: 'compress lzo' }
+  # Pourquoi: Ajuste la configuration du serveur OpenVPN en modifiant les paramètres tels que l'utilisateur, le groupe, la redirection de la passerelle, les certificats et les clés, la topologie, le chiffrement Diffie-Hellman et la compression.
+
+- name: add some secure lines
+  ansible.builtin.lineinfile:
+    dest: "/etc/openvpn/server.conf"
+    line: "{{ item }}"
+  loop:
+    - "tls-groups secp521r1"
+    - "auth SHA512"
+    - "cipher AES-256-GCM"
+    - "data-ciphers AES-128-GCM"
+    - "tls-server"
+    - "tls-version-min 1.3"
+    - "tls-cipher TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256"
+    - "tls-auth /etc/openvpn/ta.key 0"
+    - "client-config-dir /etc/openvpn/ccd"
+    - "status /var/log/openvpn/status.log"
+    - "proto udp4"
+    - "verb 3"
+    - "log-append /var/log/openvpn.log"
+  # Pourquoi: Ajoute des lignes de configuration sécurisées pour renforcer la sécurité du serveur OpenVPN.
+
+- name: Configuration IP forwarding
+  become: true
+  ansible.builtin.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+  # Pourquoi: Active le routage IP sur le serveur, permettant ainsi de rediriger le trafic réseau à travers le VPN.
+
+- name: ensure to have ccd directory
+  ansible.builtin.file:
+    path: /etc/openvpn/ccd
+    state: directory
+    owner: root
+    group: root
+    mode: 0600
+  # Pourquoi: Assure que le répertoire `ccd` existe pour la configuration des clients OpenVPN.
+
+- name: add iptables rule postrouting
+  ansible.builtin.iptables:
+    table: nat
+    chain: POSTROUTING
+    rule_num: "1"
+    source: 10.8.0.0/24
+    out_interface: ens3
+    jump: MASQUERADE
+  # Pourquoi: Configure une règle iptables pour permettre le NAT, faisant apparaître les paquets sortants du VPN comme venant du serveur VPN.
+
+- name: add iptables rule input tun0
+  ansible.builtin.iptables:
+    chain: INPUT
+    rule_num: "1"
+    in_interface: tun0
+    jump: ACCEPT 
+  # Pourquoi: Permet le trafic entrant sur l'interface VPN `tun0`.
+
+- name: add iptables rule forward tun0
+  ansible.builtin.iptables:
+    chain: FORWARD
+    rule_num: "1"
+    in_interface: ens3
+    out_interface: tun0
+    jump: ACCEPT 
+  # Pourquoi: Permet le transfert de paquets entre l'interface réseau publique `ens3` et l'interface VPN `tun0`.
+
+- name: add iptables rule forward tun0
+  ansible.builtin.iptables:
+    chain: FORWARD
+    rule_num: "1"
+    in_interface: tun0
+    out_interface: ens3
+    jump: ACCEPT
+  # Pourquoi: Permet le transfert de paquets entre l'interface VPN `tun0` et l'interface réseau publique `ens3`.
+
+- name: add iptables rule input port openvpn
+  ansible.builtin.iptables:
+    chain: INPUT
+    rule_num: "1"
+    in_interface: ens3  
+    jump: ACCEPT 
+    protocol: udp
+    destination_port: "1194"
+  # Pourquoi: Permet le trafic entrant sur le port UDP 1194 utilisé par OpenVPN.
+
+- name: Start openvpn systemd service
+  ansible.builtin.systemd:
+    name: openvpn@server
+    state: started
+    daemon_reload: yes
+    enabled: yes
+  # Pourquoi: Démarre le service OpenVPN et s'assure qu'il est activé pour démarrer au boot.
+
+- name: Save iptables rules to persist them
+  community.general.iptables_state:
+    state: saved
+    path: /etc/iptables/rules.v4
+  # Pourquoi: Sauvegarde les règles iptables pour qu'elles persistent après un redémarrage du serveur.

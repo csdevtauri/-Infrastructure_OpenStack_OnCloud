@@ -1,0 +1,4 @@
+echo "community/digitalocean/plugins/modules/digital_ocean_certificate.py" >> .trivyignore
+echo "community/network/plugins/modules/avi_cloudconnectoruser.py" >> .trivyignore
+echo "google/cloud/plugins/modules/gcp_compute_target_https_proxy.py" >> .trivyignore
+echo "community/aws/plugins/modules/sts_session_token.py" >> .trivyignore
