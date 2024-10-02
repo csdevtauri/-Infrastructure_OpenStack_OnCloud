@@ -1,41 +1,62 @@
-**/openrc.sh
-**/.env
-**/.envrc
-**/.terraform*
-**/*.tfstate
-**/*.tfstate.* 
-**/*.tfvars
-**/*.tfvars.json
-**/.terraformrc
-**/terraform.rc
-**/*.swp
-**/*.log
-.bak
-.tmp
-**/.terraform.lock.hcl
-**/.*
-**/old*
-..old
-old
-
-# Local Builds Environment
-## Vagrant
-**/Vagrantfile*
-**/.vagrant*
-
-## Docker
-**.dockerignore
-**/Dockerfile*
+# Fichiers système macOS 
 .DS_Store
-README.md
-ansible
-secrets
+# Fichiers de l'éditeur
+.vscode/
+.idea/
+*.code-workspace
+
+
+# Fichiers et répertoires générés par Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+crash.log
+
+# Fichiers de variables Terraform sensibles
+*.tfvars
+*.tfvars.json
+
+# Fichiers de configuration sensibles
+**/secrets/
+openrc.sh
+00_terraform.tfvars
+*.hcl
+00_backend.tf
+
+# Répertoires et fichiers de logs
+logs/
+*.log
+
+# Répertoires et fichiers Python (si applicables)
+__pycache__/
+*.pyc
+
+# Répertoires et fichiers générés par Ansible
+ansible/.DS_Store
+ansible/envs/*/group_vars/
+ansible/envs/*/host_vars/
+
+# Fichiers temporaires ou de sauvegarde
+*.tmp
+*.bak
+*.swp
+*~
+
+# Répertoires "old" ou de sauvegarde
+old/
+
+# Fichiers et répertoires spécifiques à Docker
 Dockerfile
 docker-compose.yml
+docker-build/.dockerignore
+docker-build/logs/
+docker-build/secrets/
+docker-build/*.log
 
-## logs
-**/logs*
-log_all_installs.txt
-log_all_installs.json
-error_log.json
-**/log_installs.sh
+
+# Fichiers d'environnement Python (si applicables)
+venv/
+.env
+
+# Fichiers de tests
+tests/
