@@ -12,6 +12,7 @@ This project automates the deployment of an OpenVPN server on an OpenStack cloud
   - [Introduction](#introduction)
   - [Table of Contents](#table-of-contents)
   - [Prerequisites](#prerequisites)
+  - [Project Structure](#project-structure)
   - [Getting Started](#getting-started)
     - [Building and Running the Docker Container](#building-and-running-the-docker-container)
       - [Docker Compose Configuration](#docker-compose-configuration)
@@ -43,6 +44,7 @@ This project automates the deployment of an OpenVPN server on an OpenStack cloud
       - [From Local Machine](#from-local-machine)
       - [From Docker Container](#from-docker-container)
     - [Verifying OpenVPN Status](#verifying-openvpn-status)
+  - [Project Diagram](#project-diagram)
   - [Appendix](#appendix)
     - [Explanation of `netstat` Options](#explanation-of-netstat-options)
   - [Notes](#notes)
@@ -57,6 +59,66 @@ This project automates the deployment of an OpenVPN server on an OpenStack cloud
 - Access credentials for an **OpenStack** environment.
 - An **SSH key** for accessing OpenStack instances.
 - (Optional) **Terraform** and **Ansible** installed locally, if not using the Docker container.
+
+---
+
+## Project Structure
+
+Below is the essential directory structure of the project, excluding any files specific to macOS or personal configurations:
+
+```plaintext
+├── LICENSE
+├── README.md
+├── ansible
+│   ├── envs
+│   │   └── dev
+│   │       ├── 00_inventory.yml
+│   │       ├── group_vars
+│   │       │   └── openvpn.yml
+│   │       └── host_vars
+│   ├── playbook.yml
+│   ├── requirements.txt
+│   └── roles
+│       └── openvpn
+│           ├── README.md
+│           ├── defaults
+│           │   └── main.yml
+│           ├── files
+│           ├── handlers
+│           │   └── main.yml
+│           ├── meta
+│           │   └── main.yml
+│           ├── tasks
+│           │   └── main.yml
+│           ├── templates
+│           ├── tests
+│           │   ├── inventory
+│           │   └── test.yml
+│           └── vars
+│               └── main.yml
+├── docker-build
+│   ├── .dockerignore
+│   ├── .trivyignore
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── log_installs.sh
+│   └── logs
+│       ├── error_log.json
+│       ├── log_all_installs.json
+│       └── log_all_installs.txt
+└── terraform
+    ├── .terraform.lock.hcl
+    ├── 00_backend.tf
+    ├── 00_providers.tf
+    ├── 00_variables.tf
+    ├── 01_keypair.tf
+    ├── 02_network.tf
+    ├── 03_security_groups.tf
+    ├── 04_instance.tf
+    └── terraform.tfstate.backup
+```
+
+**Note:** Files like `.DS_Store`, personal configuration files, and sensitive data are excluded from the repository and should not be included.
 
 ---
 
@@ -521,6 +583,39 @@ After connecting to the Debian machine where OpenVPN is running, verify active n
 ```bash
 netstat -ntaup
 ```
+
+---
+
+## Project Diagram
+
+Below is a simple diagram of the project workflow and components, represented using Mermaid syntax:
+
+```mermaid
+graph LR
+    A[Local Machine]
+    B[Docker Container]
+    C[Terraform]
+    D[Ansible]
+    E[OpenStack Cloud]
+    F[OpenVPN Server]
+
+    A -->|Runs Docker Compose| B
+    B -->|Uses| C
+    B -->|Uses| D
+    C -->|Provision Infrastructure| E
+    D -->|Configure Servers| F
+    E -->|Hosts| F
+    A -->|SSH Access| F
+```
+
+**Explanation:**
+
+- **Local Machine:** Where you initiate the Docker container and manage the project.
+- **Docker Container:** Encapsulates the environment with Terraform and Ansible.
+- **Terraform:** Used to provision infrastructure on OpenStack.
+- **Ansible:** Used to configure the OpenVPN server.
+- **OpenStack Cloud:** Cloud environment where resources are provisioned.
+- **OpenVPN Server:** The end product, accessible via SSH and VPN clients.
 
 ---
 
